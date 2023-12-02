@@ -101,8 +101,9 @@ class WhatsApp(Memacs):
     def _handle_message(self, msg):
         """parse a single message row"""
 
-        msg['number'] = '00' + msg['number'].split('@')[0]
+        # msg['number'] = '00' + msg['number'].split('@')[0]
         msg['name'] = self._numberdict.get(msg['number'],msg['number'])
+        # msg['name'] = "fulan"
         msg['verb'] = 'to' if msg['type'] else 'from'
         msg['type'] = 'OUTGOING' if msg['type'] else 'INCOMING'
         msg['handler'] = self._args.handler
@@ -132,14 +133,28 @@ class WhatsApp(Memacs):
         """
 
         conn = sqlite3.connect(os.path.abspath(self._args.msgstore.name))
-        query = conn.execute('SELECT * FROM messages')
+        query = conn.execute("""SELECT
+                m.timestamp,
+                jid.raw_string,
+                m.from_me,
+                CASE
+                    WHEN mr.revoked_key_id > 1 THEN '[Deleted]'
+                    ELSE m.text_data
+                END AS text,
+                m.message_type
+            FROM message AS m
+            LEFT JOIN chat_view AS cv ON m.chat_row_id = cv._id
+            LEFT JOIN jid ON m.sender_jid_row_id = jid._id
+            LEFT JOIN message_revoked AS mr ON m._id = mr.message_row_id""")
 
         for row in query:
+            if row[0] == None:
+                continue
             self._handle_message({
-                'timestamp': row[7],
+                'timestamp': row[0],
                 'number': row[1],
                 'type': row[2],
-                'text': row[6]
+                'text': row[3]
             })
 
             logging.debug(row)
